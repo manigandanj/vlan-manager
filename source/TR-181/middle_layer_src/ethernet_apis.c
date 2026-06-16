@@ -883,19 +883,30 @@ static ANSC_STATUS EthLink_CreateUnTaggedInterface(PDML_ETHERNET pEntry)
     // Get MAC address with offset applied
     if (ANSC_STATUS_SUCCESS != EthLink_GetMacAddr(pEntry))
     {
+#if defined (_PLATFORM_BANANAPI_R4_)
+        v_secure_system("ip link add name %s type bridge", pEntry->Name);
+        v_secure_system("ip link set dev %s master %s", pEntry->BaseInterface, pEntry->Name);
+#else
         CcspTraceError(("%s-%d: Failed to get MAC address, creating MACVLAN without custom MAC\n", __FUNCTION__, __LINE__));
         // Create MACVLAN without setting custom MAC - kernel will assign one
         v_secure_system("ip link add link %s name %s type macvlan mode private",
                         pEntry->BaseInterface, pEntry->Name);
+#endif
     }
     else
     {
         CcspTraceInfo(("%s-%d: Using MAC address: %s (offset: %ld)\n", 
                        __FUNCTION__, __LINE__, pEntry->MACAddress, pEntry->MACAddrOffSet));
         
+#if defined (_PLATFORM_BANANAPI_R4_)
+        v_secure_system("ip link add name %s type bridge", pEntry->Name);
+        v_secure_system("ip link set address %s dev %s", pEntry->MACAddress, pEntry->Name);
+        v_secure_system("ip link set dev %s master %s", pEntry->BaseInterface, pEntry->Name);
+#else
         // Create MACVLAN interface with custom MAC
         v_secure_system("ip link add link %s name %s address %s type macvlan mode private",
                         pEntry->BaseInterface, pEntry->Name, pEntry->MACAddress);
+#endif
     }
     
     // Set the allmulticast and multicast on for MACVLAN interface
@@ -1254,6 +1265,12 @@ ANSC_STATUS EthLink_GetMacAddr( PDML_ETHERNET pEntry )
     if(ANSC_STATUS_FAILURE == DmlEthGetParamValues(RDKB_PAM_COMPONENT_NAME, RDKB_PAM_DBUS_PATH, PAM_BASE_MAC_ADDRESS, acTmpReturnValue))
     {
         CcspTraceError(("[%s][%d]Failed to get param value\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
+
+    if(strlen(acTmpReturnValue) == 0)
+    {
+        CcspTraceError(("[%s][%d]Received empty param value\n", __FUNCTION__, __LINE__));
         return ANSC_STATUS_FAILURE;
     }
 
